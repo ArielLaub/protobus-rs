@@ -1,0 +1,86 @@
+// The schema protobus-rs's own suites run on.
+syntax = "proto3";
+
+package suite;
+
+// A calculator with every behaviour the suites need to provoke.
+service Calc {
+  // Adds two numbers.
+  rpc add(AddRequest) returns (AddResponse);
+  // Answers after delay_ms, or sooner when told to stop.
+  rpc slow(SlowRequest) returns (AddResponse);
+  rpc fail(FailRequest) returns (AddResponse);
+  rpc count(CountRequest) returns (stream Number);
+  rpc wallet(Money) returns (Money);
+  rpc who(Empty) returns (Who);
+  // Declared, never implemented.
+  rpc missing(Empty) returns (Empty);
+}
+
+// A service that calls itself.
+service Loop {
+  rpc relay(AddRequest) returns (AddResponse);
+}
+
+message Empty {}
+
+message AddRequest {
+  int32 a = 1;
+  int32 b = 2;
+}
+
+message AddResponse {
+  int32 result = 1;
+}
+
+message SlowRequest {
+  int32 delay_ms = 1;
+}
+
+message FailRequest {
+  // handled, unhandled or panic
+  string how = 1;
+  string code = 2;
+  // Fail only the first n attempts of a message; 0 fails every one.
+  int32 times = 3;
+}
+
+message CountRequest {
+  int32 count = 1;
+  int32 fail_at = 2;
+  int32 delay_ms = 3;
+  bool unhandled = 4;
+  int32 chunk_bytes = 5;
+}
+
+message Number {
+  int32 value = 1;
+  bytes padding = 2;
+}
+
+message Money {
+  bigint amount = 1;
+  timestamp at = 2;
+  repeated Money parts = 3;
+  map<string, bigint> by_name = 4;
+  uuid id = 5;
+}
+
+message Who {
+  string actor = 1;
+  string message_id = 2;
+  string routing_key = 3;
+  bool redelivered = 4;
+  string correlation_id = 5;
+  string method = 6;
+  int64 retry_count = 7;
+}
+
+message Placed {
+  string id = 1;
+  bigint amount = 2;
+}
+
+message Cancelled {
+  string id = 1;
+}

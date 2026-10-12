@@ -1,0 +1,182 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  unit:
+    name: unit (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal --component clippy,rustfmt && rustup default stable
+      - name: format
+        run: cargo fmt --all --check
+      - name: lint (warnings are errors)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      # No broker is named, so the integration and cross-language suites skip:
+      # this is every crate's unit tests, the suites over the in-memory broker
+      # (the multi-threaded ones among them) and the documented snippets.
+      - name: unit suites, in-memory suites and doc snippets
+        run: cargo test --workspace --locked
+      - name: the runtime builds without the proto-text feature
+        run: cargo check -p protobus --no-default-features --locked
+      - name: docs build without warnings
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --no-deps -p protobus -p protobus-build -p protobus-schema --locked
+
+  msrv:
+    name: minimum supported Rust (1.89)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: toolchain
+        run: rustup toolchain install 1.89 --profile minimal && rustup default 1.89
+      - run: cargo check --workspace --all-targets --locked
+
+  integration:
+    name: integration (RabbitMQ ${{ matrix.rabbitmq }})
+    runs-on: ubuntu-24.04
+    # The suites never default to a broker; these point them at the service
+    # container. Set only on the jobs that have one.
+    env:
+      PROTOBUS_TEST_AMQP_URL: amqp://guest:guest@127.0.0.1:29672/
+      PROTOBUS_TEST_MGMT_URL: http://guest:guest@127.0.0.1:29673
+    strategy:
+      matrix:
+        rabbitmq: ["3-management", "4-management"]
+    services:
+      rabbitmq:
+        image: rabbitmq:${{ matrix.rabbitmq }}
+        ports:
+          - 29672:5672
+          - 29673:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s --health-timeout 10s --health-retries 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - name: integration suite
+        run: cargo test -p protobus-tests --test integration --locked
+      - name: examples run end to end
+        env:
+          AMQP_URL: amqp://guest:guest@127.0.0.1:29672/
+        run: |
+          cargo run -p protobus-examples --bin calculator --locked
+          cargo run -p protobus-examples --bin tokenstream --locked
+
+  cross-language:
+    name: cross-language (Rust <-> TypeScript <-> Python <-> Go <-> C++ <-> Java <-> C#)
+    runs-on: ubuntu-24.04
+    env:
+      PROTOBUS_TEST_AMQP_URL: amqp://guest:guest@127.0.0.1:29672/
+      PROTOBUS_TEST_MGMT_URL: http://guest:guest@127.0.0.1:29673
+    services:
+      rabbitmq:
+        image: rabbitmq:3-management
+        ports:
+          - 29672:5672
+          - 29673:15672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s --health-timeout 10s --health-retries 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: protobus-rs
+      # The peers are pinned: bump deliberately, after their own CI passes.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ArielLaub/protobus
+          ref: 182eb6d43801c8264c52690897c6ca468e833dde
+          path: protobus
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ArielLaub/protobus-py
+          ref: b6290c772811cd6199677aaf4f56ce6f9fd444af
+          path: protobus-py
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ArielLaub/protobus-go
+          ref: 1382871f62f08fdb672c6615113f41dbdedd092b
+          path: protobus-go
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ArielLaub/protobus-cpp
+          ref: 2d1b698f1d28ab5ce4794aec831990df58cef144
+          path: protobus-cpp
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ArielLaub/protobus-java
+          ref: 91ec68d2dea87ef50d6fe9b0a803f663c7dc4fff # 2.0.0
+          path: protobus-java
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ArielLaub/protobus-csharp
+          ref: efafb681260c8a2682440cb3269f83fd9a682ef2
+          path: protobus-csharp
+      - name: toolchain
+        run: rustup toolchain install stable --profile minimal && rustup default stable
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: protobus-csharp/global.json
+          dotnet-version: 8.0.x
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: stable
+          cache-dependency-path: protobus-go/go.sum
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: build the TypeScript port
+        working-directory: protobus
+        run: npm ci && npm run build-ts
+      - name: install the Python port
+        working-directory: protobus-py
+        run: python -m venv venv && venv/bin/pip install -e .
+      - name: build the C++ peer
+        working-directory: protobus-cpp
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y g++ cmake ninja-build libprotobuf-dev libprotoc-dev protobuf-compiler librabbitmq-dev libgtest-dev
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPROTOBUS_BUILD_EXAMPLES=OFF
+          cmake --build build --target cpppeer
+      - name: build the C# peer
+        working-directory: protobus-csharp
+        run: dotnet build crosslang/CSharpPeer -c Release
+      - name: cross-language suite
+        working-directory: protobus-rs
+        env:
+          PROTOBUS_TS: ${{ github.workspace }}/protobus
+          PROTOBUS_PY: ${{ github.workspace }}/protobus-py
+          PROTOBUS_GO: ${{ github.workspace }}/protobus-go
+          PROTOBUS_CPP: ${{ github.workspace }}/protobus-cpp
+          PROTOBUS_JAVA: ${{ github.workspace }}/protobus-java
+          PROTOBUS_CSHARP: ${{ github.workspace }}/protobus-csharp
+        run: cargo test -p protobus-crosslang --test crosslang --locked

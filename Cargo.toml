@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["protobus", "protobus-schema", "protobus-build", "crosslang", "tests", "examples"]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.89"
+license = "MIT"
+repository = "https://github.com/ArielLaub/protobus-rs"
+authors = ["Ariel Laub"]
+
+[workspace.dependencies]
+prost = "0.14"
+prost-types = "0.14"
+prost-build = "0.14"
+prost-reflect = "0.16"
+protox = "0.10"

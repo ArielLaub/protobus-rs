@@ -1,0 +1,31 @@
+[package]
+name = "protobus"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "RabbitMQ-native microservices with Protocol Buffers: RPC, server streaming and events, wire-compatible with the other protobus ports"
+readme = "../README.md"
+keywords = ["rabbitmq", "amqp", "protobuf", "rpc", "microservices"]
+categories = ["network-programming", "asynchronous"]
+
+[dependencies]
+tokio = { version = "1", features = ["rt", "sync", "time", "macros", "signal"] }
+lapin = "4"
+prost.workspace = true
+prost-types.workspace = true
+prost-reflect.workspace = true
+protobus-schema = { path = "../protobus-schema", version = "2.0.0", optional = true }
+async-trait = "0.1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+uuid = { version = "1", features = ["v4"] }
+log = "0.4"
+
+[features]
+default = ["proto-text"]
+# Load .proto files as text at runtime (MessageFactory::load, parse).
+proto-text = ["dep:protobus-schema"]
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "test-util"] }

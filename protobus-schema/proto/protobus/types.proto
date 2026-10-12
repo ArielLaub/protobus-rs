@@ -1,0 +1,17 @@
+// The protobus built-in custom types.
+//
+// Declared at the root of the type namespace, with no package, exactly as
+// every other port declares them: the full names `bigint` and `timestamp` are
+// part of the wire contract. A shared schema uses them without importing this
+// file; protobus adds the import when it compiles the schema.
+syntax = "proto3";
+
+// An unsigned integer up to 2^256-1: exactly 32 bytes, big-endian.
+message bigint {
+  optional bytes value = 1;
+}
+
+// Signed milliseconds since the Unix epoch.
+message timestamp {
+  optional int64 value = 1;
+}

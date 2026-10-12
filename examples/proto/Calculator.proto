@@ -1,0 +1,31 @@
+syntax = "proto3";
+package Calculator;
+
+service Service {
+  rpc add(AddRequest) returns (AddResponse);
+  rpc divide(DivideRequest) returns (DivideResponse);
+}
+
+message AddRequest {
+  int32 a = 1;
+  int32 b = 2;
+}
+
+message AddResponse {
+  int32 result = 1;
+}
+
+message DivideRequest {
+  double dividend = 1;
+  double divisor = 2;
+}
+
+message DivideResponse {
+  double quotient = 1;
+}
+
+// Published after every successful calculation.
+message Calculated {
+  string operation = 1;
+  timestamp at = 2;
+}

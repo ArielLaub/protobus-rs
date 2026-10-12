@@ -1,0 +1,45 @@
+# A throwaway RabbitMQ for the integration and cross-language suites.
+#
+# Deliberately NOT on 5672/15672: those are routinely a port-forward to a
+# shared cluster, and these suites declare and delete queues. Point the tests
+# here explicitly:
+#
+#   docker compose up -d --wait
+#   export PROTOBUS_TEST_AMQP_URL=amqp://guest:guest@127.0.0.1:29672/
+#   export PROTOBUS_TEST_MGMT_URL=http://guest:guest@127.0.0.1:29673
+#   cargo test --workspace
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: protobus-rs-rabbitmq
+    ports:
+      - "127.0.0.1:${PROTOBUS_AMQP_PORT:-29672}:5672"
+      - "127.0.0.1:${PROTOBUS_MGMT_PORT:-29673}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+
+  # RabbitMQ 4, for the same suites: docker compose --profile rmq4 up -d --wait
+  # then point the variables at 29674 / 29675.
+  rabbitmq4:
+    profiles: ["rmq4"]
+    image: rabbitmq:4-management
+    container_name: protobus-rs-rabbitmq4
+    ports:
+      - "127.0.0.1:${PROTOBUS_AMQP4_PORT:-29674}:5672"
+      - "127.0.0.1:${PROTOBUS_MGMT4_PORT:-29675}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+      start_period: 10s

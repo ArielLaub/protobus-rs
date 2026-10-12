@@ -1,0 +1,13 @@
+[package]
+name = "protobus-examples"
+description = "Runnable protobus-rs examples"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+protobus = { path = "../protobus" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+
+[build-dependencies]
+protobus-build = { path = "../protobus-build" }

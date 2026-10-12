@@ -1,0 +1,20 @@
+[package]
+name = "protobus-tests"
+description = "protobus-rs's own suites: everything against the in-memory broker, and the parts only a real broker can prove"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+protobus = { path = "../protobus" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+futures-core = "0.3"
+log = "0.4"
+prost.workspace = true
+
+[dev-dependencies]
+protobus-build = { path = "../protobus-build" }
+prost-types.workspace = true
+
+[build-dependencies]
+protobus-build = { path = "../protobus-build" }

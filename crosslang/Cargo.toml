@@ -1,0 +1,21 @@
+[package]
+name = "protobus-crosslang"
+description = "The cross-language suite: protobus-rs against the other ports' real libraries"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[[bin]]
+name = "rustpeer"
+path = "src/bin/rustpeer.rs"
+
+[dependencies]
+protobus = { path = "../protobus" }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "sync"] }
+log = "0.4"
+
+[dev-dependencies]
+protobus-tests = { path = "../tests" }
+
+[build-dependencies]
+protobus-build = { path = "../protobus-build" }

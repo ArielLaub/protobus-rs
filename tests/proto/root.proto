@@ -1,0 +1,11 @@
+// A schema with no package: its types are generated at the root.
+syntax = "proto3";
+
+service Rootless {
+  rpc ping(RootPing) returns (RootPing);
+}
+
+message RootPing {
+  string text = 1;
+  uuid id = 2;
+}

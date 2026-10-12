@@ -1,0 +1,125 @@
+// The cross-language contract. One schema, loaded verbatim by the Go,
+// TypeScript and Python peers of the interop suite (see crosslang/README.md).
+// Like every shared protobus schema it has no go_package and uses the custom
+// types without importing them.
+syntax = "proto3";
+
+package interop;
+
+// Unary and server-streaming basics, plus call metadata.
+service Counter {
+  rpc add(AddRequest) returns (AddResponse);
+  rpc tick(TickRequest) returns (stream Tick);
+  // What the last tick stream's producer did, so a caller can see a
+  // cancellation reached it.
+  rpc produced(Nothing) returns (Produced);
+  rpc whoami(Nothing) returns (Who);
+  // Declared but implemented by no peer: answers PROTOCOL_ERROR.
+  rpc unimplemented(Nothing) returns (Nothing);
+}
+
+// Every field kind, the custom types and the error paths.
+service Wallet {
+  rpc balance(Query) returns (Balance);
+  rpc echo(Balance) returns (Balance);
+}
+
+// Replicas in several languages share this service's queue and retry ladder.
+// fail always fails, after announcing the attempt as an event.
+service Flaky {
+  rpc fail(FailRequest) returns (Nothing);
+}
+
+// A contract with no methods, for processes that only subscribe to events.
+service Listener {}
+
+message Nothing {}
+
+message AddRequest {
+  int32 a = 1;
+  int32 b = 2;
+}
+
+message AddResponse {
+  int32 sum = 1;
+}
+
+message TickRequest {
+  int32 count = 1;
+  // Fail after this many chunks (0 = never): a HandledError TEST_FAIL, or a
+  // plain error when unhandled is set.
+  int32 fail_at = 2;
+  bool emit_nothing = 3;
+  int32 delay_ms = 4;
+  bool unhandled = 5;
+}
+
+message Tick {
+  int32 seq = 1;
+  string payload = 2;
+}
+
+message Produced {
+  int32 yielded = 1;
+  bool stopped_early = 2;
+  bool finished = 3;
+}
+
+message Who {
+  string actor = 1;
+  string message_id = 2;
+  string routing_key = 3;
+  string lang = 4;
+}
+
+message Query {
+  // "boom": HandledError NOT_FOUND. "crash": an unhandled error.
+  string account = 1;
+}
+
+enum Kind {
+  KIND_UNKNOWN = 0;
+  KIND_SPOT = 1;
+  KIND_FUTURE = 2;
+}
+
+message Inner {
+  string name = 1;
+  bigint value = 2;
+  repeated Inner children = 3;
+}
+
+message Balance {
+  bigint amount = 1;
+  timestamp as_of = 2;
+  int64 big = 3;
+  repeated string tags = 4;
+  map<string, int32> counts = 5;
+  map<string, bigint> balances = 6;
+  repeated bigint parts = 7;
+  Kind kind = 8;
+  Inner inner = 9;
+  uint64 ubig = 10;
+  bytes blob = 11;
+  double ratio = 12;
+  bool flag = 13;
+  int32 neg = 14;
+  timestamp before_epoch = 15;
+  // Always zero: a proto3 default must read back as zero, not as absent.
+  int32 zero = 16;
+}
+
+message FailRequest {
+  string id = 1;
+}
+
+message Ping {
+  string id = 1;
+  bigint n = 2;
+  string from = 3;
+}
+
+message Attempted {
+  string lang = 1;
+  string message_id = 2;
+}

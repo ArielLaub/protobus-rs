@@ -1,0 +1,32 @@
+// Names that need care in generated Rust.
+syntax = "proto3";
+
+package deep.pkg.v1;
+
+import "suite.proto";
+
+service Naming {
+  // An rpc named like a proxy constructor.
+  rpc new(Thing) returns (Thing);
+  rpc raw(Thing) returns (Thing);
+  // A Rust keyword.
+  rpc type(Thing) returns (Thing);
+  rpc getUser(Thing) returns (stream Thing);
+  rpc get_user_with(Thing) returns (Thing);
+  // Client streaming is not part of the protobus protocol: skipped.
+  rpc upload(stream Thing) returns (Thing);
+  // A type from another package.
+  rpc pay(suite.Money) returns (suite.Money);
+}
+
+message Thing {
+  string type = 1;
+  message Inner {
+    bigint n = 1;
+  }
+  Inner inner = 2;
+  oneof choice {
+    string text = 3;
+    timestamp at = 4;
+  }
+}

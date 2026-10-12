@@ -1,0 +1,19 @@
+[package]
+name = "protobus-build"
+description = "Generates Rust services and proxies from protobus .proto schemas, in build.rs or from the command line"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["protobus", "protobuf", "codegen", "rabbitmq"]
+
+[[bin]]
+name = "protobus-rs"
+path = "src/main.rs"
+
+[dependencies]
+prost-build.workspace = true
+prost-types.workspace = true
+prost.workspace = true
+protobus-schema = { path = "../protobus-schema", version = "2.0.0" }
