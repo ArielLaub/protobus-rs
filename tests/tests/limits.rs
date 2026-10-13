@@ -324,7 +324,13 @@ async fn closing_a_context_waits_for_running_handlers_up_to_the_drain_timeout() 
         .await
     });
     stuck.await.unwrap().unwrap();
-    assert!(eventually(|| bus.server.connection().in_flight_deliveries() == 1).await);
+    // The one-way add may still be settling: wait for the slow handler itself.
+    assert!(
+        eventually(|| {
+            bus.seen.calls.load(Ordering::SeqCst) == 2 && bus.server.connection().in_flight_deliveries() == 1
+        })
+        .await
+    );
     let started = Instant::now();
     bus.server.close().await;
     let waited = started.elapsed();
