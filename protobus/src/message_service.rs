@@ -3,8 +3,10 @@
 
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Mutex, RwLock};
 
+use futures_util::FutureExt;
 use prost::Message;
 use prost_reflect::{DynamicMessage, ReflectMessage};
 use tokio::sync::mpsc;
@@ -535,8 +537,20 @@ impl MessageService {
                     method: full_method.as_str().into(),
                 };
                 let work = in_turn(turn, service_name.clone(), handler(envelope.data, call, writer));
+                // The producer outlives its delivery's settlement when the
+                // caller cancels, so it counts as running on its own until it
+                // actually exits, whichever way.
+                let running = inner.context.connection().running_handler();
                 inner.context.connection().spawn(async move {
-                    let Err(error) = work.await else { return };
+                    let _running = running;
+                    let error = match AssertUnwindSafe(work).catch_unwind().await {
+                        Ok(Ok(())) => return,
+                        Ok(Err(error)) => error,
+                        // A panic would otherwise just drop the writer, which
+                        // the reply publisher takes for a normal end.
+                        Err(panic) => Error::failure(format!("the handler panicked: {}", panic_message(&panic)))
+                            .with_name("Panic"),
+                    };
                     // A failure, at any point, ends the stream with a terminal
                     // error chunk, sanitised like a unary error, which the
                     // caller's iteration raises. A cancelled stream ends
@@ -575,6 +589,16 @@ async fn in_turn<T>(turn: Option<Arc<tokio::sync::Mutex<()>>>, service: String, 
                 })
                 .await
         }
+    }
+}
+
+fn panic_message(panic: &(dyn std::any::Any + Send)) -> &str {
+    if let Some(s) = panic.downcast_ref::<&str>() {
+        s
+    } else if let Some(s) = panic.downcast_ref::<String>() {
+        s
+    } else {
+        "unknown payload"
     }
 }
 

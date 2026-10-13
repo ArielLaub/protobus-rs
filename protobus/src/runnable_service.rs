@@ -23,8 +23,9 @@ struct Registry {
     shutting_down: bool,
     signals_installed: bool,
     exit_code: i32,
-    /// Counts completed shutdowns, so a waiter that arrives late still returns.
-    done: watch::Sender<u64>,
+    /// Whether this lifecycle's shutdown has completed, so a waiter that
+    /// arrives late still returns. [`RunnableService::reset`] clears it.
+    done: watch::Sender<bool>,
 }
 
 fn registry() -> &'static Mutex<Registry> {
@@ -35,7 +36,7 @@ fn registry() -> &'static Mutex<Registry> {
             shutting_down: false,
             signals_installed: false,
             exit_code: 0,
-            done: watch::channel(0).0,
+            done: watch::channel(false).0,
         })
     })
 }
@@ -109,11 +110,10 @@ impl RunnableService {
     }
 
     /// Wait until a shutdown has completed; returns the exit code (0, or 1
-    /// after a startup failure).
+    /// after a startup failure). Returns at once when it already has.
     pub async fn wait_for_shutdown() -> i32 {
         let mut done = registry().lock().unwrap().done.subscribe();
-        let seen = *done.borrow_and_update();
-        let _ = done.wait_for(|n| *n > seen).await;
+        let _ = done.wait_for(|done| *done).await;
         registry().lock().unwrap().exit_code
     }
 
@@ -124,6 +124,7 @@ impl RunnableService {
         r.started.clear();
         r.shutting_down = false;
         r.exit_code = 0;
+        r.done.send_replace(false);
     }
 }
 
@@ -220,5 +221,5 @@ async fn shutdown(reason: &'static str) {
         context.close().await;
     }
     log::info!(target: "protobus", "Connection closed");
-    registry().lock().unwrap().done.send_modify(|n| *n += 1);
+    registry().lock().unwrap().done.send_replace(true);
 }

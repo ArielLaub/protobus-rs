@@ -191,6 +191,9 @@ impl CalcHandler for Calc {
         self.seen.yielded.store(0, Ordering::SeqCst);
         self.seen.stopped_early.store(0, Ordering::SeqCst);
         for value in 0..r.count {
+            if r.panic_at > 0 && value >= r.panic_at {
+                panic!("the producer panicked on purpose");
+            }
             if r.fail_at > 0 && value >= r.fail_at {
                 return Err(if r.unhandled {
                     Error::failure("stream broke")
@@ -214,6 +217,9 @@ impl CalcHandler for Calc {
                     _ = tokio::time::sleep(Duration::from_millis(r.delay_ms as u64)) => {}
                     _ = call.cancel.cancelled() => {
                         self.seen.stopped_early.store(1, Ordering::SeqCst);
+                        if r.linger_ms > 0 {
+                            tokio::time::sleep(Duration::from_millis(r.linger_ms as u64)).await;
+                        }
                         return Ok(());
                     }
                 }

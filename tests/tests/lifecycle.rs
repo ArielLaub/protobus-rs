@@ -151,6 +151,11 @@ async fn runnable_services_shut_down_in_order() {
     assert!(cleaned.load(Ordering::SeqCst));
     assert_eq!(running_at_cleanup.load(Ordering::SeqCst), 0);
     assert!(!server.is_connected(), "the context was closed");
+    // A waiter that arrives after the shutdown completed returns at once.
+    let code = tokio::time::timeout(Duration::from_secs(1), RunnableService::wait_for_shutdown())
+        .await
+        .expect("a late waiter does not hang");
+    assert_eq!(code, 0);
     client.close().await;
 
     // A startup failure closes the context and is reported.

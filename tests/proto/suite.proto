@@ -51,6 +51,10 @@ message CountRequest {
   int32 delay_ms = 3;
   bool unhandled = 4;
   int32 chunk_bytes = 5;
+  // Panic once this many chunks are out (0: never).
+  int32 panic_at = 6;
+  // Keep running this long after a cancellation is heard.
+  int32 linger_ms = 7;
 }
 
 message Number {

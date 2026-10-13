@@ -1121,11 +1121,21 @@ struct InFlight {
 }
 
 /// Counts a handler as running until it returns, panics or is dropped.
-struct RunningHandler(Connection);
+pub(crate) struct RunningHandler(Connection);
 
 impl Drop for RunningHandler {
     fn drop(&mut self) {
         self.0.drain_update(|d| d.1 = d.1.saturating_sub(1));
+    }
+}
+
+impl Connection {
+    /// Count handler work as running, for draining, until the guard drops:
+    /// hold it in any task that runs handler code past its delivery's
+    /// settlement, such as a streaming producer.
+    pub(crate) fn running_handler(&self) -> RunningHandler {
+        self.drain_update(|d| d.1 += 1);
+        RunningHandler(self.clone())
     }
 }
 
@@ -1191,8 +1201,7 @@ impl InFlight {
             redelivered: self.delivery.redelivered,
             headers: self.headers.clone(),
         };
-        self.connection().drain_update(|d| d.1 += 1);
-        let running = RunningHandler(self.connection().clone());
+        let running = self.connection().running_handler();
         let work = (c.handler)(self.delivery.body.clone(), self.correlation_id.clone(), context);
 
         if c.options.ordered {

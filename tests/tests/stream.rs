@@ -102,6 +102,54 @@ async fn an_unhandled_error_ends_the_stream_too() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_panicking_producer_ends_the_stream_with_an_error() {
+    let bus = Bus::with_options(fast_retry(3)).await;
+    let request = CountRequest {
+        count: 10,
+        panic_at: 1,
+        ..Default::default()
+    };
+    let mut numbers = bus.calc.count(request).unwrap();
+    assert_eq!(numbers.next().await.unwrap().unwrap().value, 0);
+    let e = numbers.next().await.unwrap().unwrap_err();
+    assert_eq!(e.kind(), ErrorKind::Remote, "{e}");
+    assert!(e.message().contains("panicked"), "{e}");
+    assert!(numbers.next().await.is_none());
+    // Like any other failure: not retried, and the service keeps serving.
+    assert_eq!(bus.seen.calls.load(Ordering::SeqCst), 1);
+    assert_eq!(bus.broker.queue_depth("suite.Calc.DLQ"), 0);
+    assert!(eventually(|| bus.broker.unacked_count("suite.Calc") == 0).await);
+    assert!(eventually(|| bus.server.connection().in_flight_deliveries() == 0).await);
+    assert_eq!(bus.calc.add(AddRequest { a: 1, b: 1 }).await.unwrap().result, 2);
+    bus.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_producer_that_outlives_its_cancelled_stream_is_still_draining() {
+    let bus = Bus::new().await;
+    let mut numbers = bus
+        .calc
+        .count(CountRequest {
+            count: 10_000,
+            delay_ms: 2,
+            linger_ms: 400,
+            ..Default::default()
+        })
+        .unwrap();
+    numbers.next().await.unwrap().unwrap();
+    numbers.cancel();
+    assert!(eventually(|| bus.seen.stopped_early.load(Ordering::SeqCst) == 1).await);
+    // The delivery is settled, but the producer is still running: a drain
+    // waits for it, so cleanup never runs under its feet.
+    assert!(eventually(|| bus.broker.unacked_count("suite.Calc") == 0).await);
+    assert_eq!(bus.server.connection().in_flight_deliveries(), 1);
+    assert!(!bus.server.connection().drain_in_flight(50).await);
+    assert!(bus.server.connection().drain_in_flight(2000).await);
+    assert_eq!(bus.seen.running.load(Ordering::SeqCst), 0);
+    bus.close().await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn dropping_a_stream_stops_its_producer() {
     let bus = Bus::new().await;
     let mut numbers = bus
