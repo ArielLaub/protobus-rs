@@ -46,6 +46,14 @@ async fn a_lost_connection_is_restored_with_everything_on_it() {
     });
 
     for round in 1..=3 {
+        // The handler counts an event before its ack leaves: a kill in that
+        // window requeues it, and the redelivery would count it twice.
+        assert!(
+            eventually(|| {
+                bus.broker.unacked_count("suite.Calc.Events") == 0 && bus.broker.unacked_count("suite.Calc") == 0
+            })
+            .await
+        );
         bus.broker.kill_connections("connection reset by peer");
         assert!(!bus.server.connection().is_ready());
         ready(&bus).await;
@@ -82,7 +90,15 @@ async fn a_call_pending_when_the_connection_drops_fails_at_once() {
         })
         .unwrap();
     let dispatcher = bus.client.message_dispatcher().clone();
-    assert!(eventually(|| dispatcher.pending_call_count() == 1 && bus.broker.unacked_count("suite.Calc") >= 1).await);
+    // A stream whose request has not left yet survives a disconnect by
+    // design, so both requests must have reached the broker before the drop.
+    assert!(
+        eventually(|| {
+            dispatcher.pending_call_count() == 1
+                && bus.broker.unacked_count("suite.Calc") + bus.broker.queue_depth("suite.Calc") >= 2
+        })
+        .await
+    );
 
     bus.broker.kill_connections("connection reset by peer");
     let e = pending.await.unwrap().unwrap_err();
