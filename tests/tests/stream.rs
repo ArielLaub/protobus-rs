@@ -113,7 +113,7 @@ async fn a_panicking_producer_ends_the_stream_with_an_error() {
     assert_eq!(numbers.next().await.unwrap().unwrap().value, 0);
     let e = numbers.next().await.unwrap().unwrap_err();
     assert_eq!(e.kind(), ErrorKind::Remote, "{e}");
-    assert!(e.message().contains("panicked"), "{e}");
+    assert_eq!(e.message(), "the handler panicked: the producer panicked on purpose");
     assert!(numbers.next().await.is_none());
     // Like any other failure: not retried, and the service keeps serving.
     assert_eq!(bus.seen.calls.load(Ordering::SeqCst), 1);

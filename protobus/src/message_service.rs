@@ -548,8 +548,10 @@ impl MessageService {
                         Ok(Err(error)) => error,
                         // A panic would otherwise just drop the writer, which
                         // the reply publisher takes for a normal end.
-                        Err(panic) => Error::failure(format!("the handler panicked: {}", panic_message(&panic)))
-                            .with_name("Panic"),
+                        Err(panic) => {
+                            Error::failure(format!("the handler panicked: {}", panic_message(panic.as_ref())))
+                                .with_name("Panic")
+                        }
                     };
                     // A failure, at any point, ends the stream with a terminal
                     // error chunk, sanitised like a unary error, which the
